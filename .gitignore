@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.env
+package/
+
+# Lambda zip files (too large for git)
+*.zip
+
+# AWS credentials
+.aws/
+
+# Zone identifier files from Windows
+*:Zone.Identifier
+
+# Test output
+test_results.json
+
+# Node
+node_modules/

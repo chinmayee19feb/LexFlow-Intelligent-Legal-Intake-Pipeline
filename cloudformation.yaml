@@ -1,0 +1,288 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "LexFlow — Intelligent Legal Intake Pipeline"
+
+Parameters:
+  AnthropicApiKeyParam:
+    Type: String
+    Default: /lexflow/anthropic-api-key
+    Description: >
+      SSM Parameter Store path for the Anthropic API key.
+      Before deploying, run:
+        aws ssm put-parameter --name /lexflow/anthropic-api-key \
+          --value "sk-ant-YOUR_KEY" --type SecureString --region us-east-1
+
+  AttorneyEmail:
+    Type: String
+    Description: SES-verified email address to receive attorney alerts
+    Default: attorney@example.com
+
+  FromEmail:
+    Type: String
+    Description: SES-verified sender email address
+    Default: noreply@example.com
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # ── Storage ──────────────────────────────────────────────────────────────
+
+  LexFlowTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: lexflow-intakes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: intake_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: intake_id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: LexFlow
+
+  IntakeFormBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "lexflow-intake-form-${AWS::AccountId}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Project
+          Value: LexFlow
+
+  IntakeFormBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref IntakeFormBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${IntakeFormBucket.Arn}/*"
+
+  DashboardBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "lexflow-dashboard-${AWS::AccountId}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Project
+          Value: LexFlow
+
+  DashboardBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DashboardBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${DashboardBucket.Arn}/*"
+
+  # ── IAM ──────────────────────────────────────────────────────────────────
+
+  LexFlowLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: lexflow-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: lexflow-lambda-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: DynamoDBAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                Resource: !GetAtt LexFlowTable.Arn
+
+              - Sid: SESAccess
+                Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  # ── Compute ───────────────────────────────────────────────────────────────
+  # NOTE: Lambda code is deployed separately after stack creation.
+  # Use the deploy script (see README) to package and upload the zip files.
+  # The ZipFile below is a placeholder that will be replaced on first deploy.
+
+  IntakeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lexflow-intake
+      Runtime: python3.12
+      Handler: handler.lambda_handler
+      Role: !GetAtt LexFlowLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder"}
+      Environment:
+        Variables:
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKeyParam
+          DYNAMODB_TABLE_NAME: !Ref LexFlowTable
+          ATTORNEY_EMAIL: !Ref AttorneyEmail
+          FROM_EMAIL: !Ref FromEmail
+      Tags:
+        - Key: Project
+          Value: LexFlow
+
+  DashboardLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lexflow-dashboard
+      Runtime: python3.12
+      Handler: handler.lambda_handler
+      Role: !GetAtt LexFlowLambdaRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder"}
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref LexFlowTable
+      Tags:
+        - Key: Project
+          Value: LexFlow
+
+  # ── API Gateway ──────────────────────────────────────────────────────────
+
+  LexFlowApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: lexflow-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+  IntakeIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LexFlowApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IntakeLambda.Arn}/invocations"
+      PayloadFormatVersion: "2.0"
+
+  DashboardIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LexFlowApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardLambda.Arn}/invocations"
+      PayloadFormatVersion: "2.0"
+
+  IntakeRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LexFlowApi
+      RouteKey: "POST /intake"
+      Target: !Sub "integrations/${IntakeIntegration}"
+
+  DashboardRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LexFlowApi
+      RouteKey: "GET /dashboard"
+      Target: !Sub "integrations/${DashboardIntegration}"
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref LexFlowApi
+      StageName: "$default"
+      AutoDeploy: true
+
+  # ── Lambda Permissions ───────────────────────────────────────────────────
+
+  IntakeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt IntakeLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LexFlowApi}/*/*/intake"
+
+  DashboardLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DashboardLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LexFlowApi}/*/*/dashboard"
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway base URL
+    Value: !Sub "https://${LexFlowApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Export:
+      Name: LexFlowApiEndpoint
+
+  IntakeFormUrl:
+    Description: S3 static website URL for the intake form
+    Value: !GetAtt IntakeFormBucket.WebsiteURL
+    Export:
+      Name: LexFlowIntakeFormUrl
+
+  DashboardUrl:
+    Description: S3 static website URL for the ops dashboard
+    Value: !GetAtt DashboardBucket.WebsiteURL
+    Export:
+      Name: LexFlowDashboardUrl
+
+  DynamoTableName:
+    Description: DynamoDB table name
+    Value: !Ref LexFlowTable
