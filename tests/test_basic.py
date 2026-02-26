@@ -31,6 +31,11 @@ def test_cors_headers():
     """Verify CORS headers are correct."""
     import sys
     import os
+    # Set required env vars before importing handler
+    os.environ["ANTHROPIC_API_KEY"] = "test-key"
+    os.environ["DYNAMODB_TABLE_NAME"] = "test-table"
+    os.environ["ATTORNEY_EMAIL"] = "test@test.com"
+    os.environ["FROM_EMAIL"] = "noreply@test.com"
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lexflow-intake'))
     import handler
     headers = handler._cors_headers()
