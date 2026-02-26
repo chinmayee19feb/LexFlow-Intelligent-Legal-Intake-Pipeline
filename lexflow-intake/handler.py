@@ -1,112 +1,297 @@
 """
-lexflow-dashboard Lambda handler.
-
-Returns aggregated metrics from all intake records for the ops dashboard.
+lexflow-intake Lambda handler.
+Receives client intake form submissions, runs AI classification,
+saves to DynamoDB, and sends confirmation emails.
 """
-
 import json
 import logging
 import os
-from collections import defaultdict
+import uuid
+from datetime import datetime, timezone
 
+import ai_classifier
 import db
+import emailer
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-DYNAMODB_TABLE = os.environ["DYNAMODB_TABLE_NAME"]
-AWS_REGION     = os.environ.get("AWS_REGION", "us-east-1")
+DYNAMODB_TABLE  = os.environ["DYNAMODB_TABLE_NAME"]
+ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
+ATTORNEY_EMAIL  = os.environ["ATTORNEY_EMAIL"]
+FROM_EMAIL      = os.environ["FROM_EMAIL"]
+AWS_REGION      = os.environ.get("AWS_REGION", "us-east-1")
 
+REQUIRED_FIELDS = {"client_name", "client_email", "client_phone", "incident_date", "description"}
 
 def _cors_headers() -> dict:
     return {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin":  "*",
         "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Methods": "POST,OPTIONS",
     }
-
 
 def _response(status_code: int, body: dict) -> dict:
     return {
         "statusCode": status_code,
         "headers": {**_cors_headers(), "Content-Type": "application/json"},
-        "body": json.dumps(body, default=str),  # default=str handles Decimal from DynamoDB
+        "body": json.dumps(body, default=str),
     }
-
 
 def lambda_handler(event, context):
-    logger.info("Dashboard request received")
+    # Handle CORS preflight
+    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    if method == "OPTIONS":
+        return _response(200, {})
 
-    # ------------------------------------------------------------------
-    # BLOCK 1: Scan DynamoDB
-    # ------------------------------------------------------------------
+    logger.info("Intake request received")
+
+    # Parse body
     try:
-        items = db.scan_all(table_name=DYNAMODB_TABLE, region=AWS_REGION)
+        raw_body = event.get("body", "{}")
+        if isinstance(raw_body, str):
+            body = json.loads(raw_body)
+        else:
+            body = raw_body or {}
+    except json.JSONDecodeError as e:
+        logger.error("Invalid JSON body | error=%s", str(e))
+        return _response(400, {"error": "Invalid JSON in request body."})
+
+    # Validate required fields
+    missing = REQUIRED_FIELDS - body.keys()
+    if missing:
+        logger.warning("Missing required fields | fields=%s", missing)
+        return _response(400, {"error": f"Missing required fields: {sorted(missing)}"})
+
+    client_name    = body["client_name"].strip()
+    client_email   = body["client_email"].strip()
+    client_phone   = body["client_phone"].strip()
+    incident_date  = body["incident_date"].strip()
+    description    = body["description"].strip()
+    prior_attorney = bool(body.get("prior_attorney", False))
+
+    # Run AI classification
+    try:
+        ai_result = ai_classifier.classify(
+            name=client_name,
+            description=description,
+            incident_date=incident_date,
+            prior_attorney=prior_attorney,
+            api_key=ANTHROPIC_KEY,
+        )
+        logger.info(
+            "AI classification complete | case_type=%s | score=%s | urgency=%s",
+            ai_result["case_type"], ai_result["viability_score"], ai_result["urgency"]
+        )
     except Exception as e:
-        logger.error("DynamoDB scan failed | error=%s", str(e))
-        return _response(500, {"error": "Failed to retrieve intake data."})
+        logger.error("AI classification failed | error=%s", str(e))
+        return _response(500, {"error": "AI classification failed. Please try again."})
 
-    # ------------------------------------------------------------------
-    # BLOCK 2: Aggregate
-    # ------------------------------------------------------------------
-    total = len(items)
-    by_case_type = defaultdict(int)
-    by_urgency   = defaultdict(int)
-    by_status    = defaultdict(int)
-    viability_scores = []
+    # Build record
+    intake_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
 
-    for item in items:
-        # Count by case type
-        by_case_type[item.get("case_type", "Unknown")] += 1
-
-        # Count by urgency
-        by_urgency[item.get("urgency", "unknown")] += 1
-
-        # Count by status
-        by_status[item.get("status", "unknown")] += 1
-
-        # Collect viability scores (skip AI-failed records with score 0)
-        score = item.get("viability_score")
-        if score and int(score) > 0:
-            viability_scores.append(int(score))
-
-    avg_viability = round(sum(viability_scores) / len(viability_scores), 1) if viability_scores else 0.0
-    new_count      = by_status.get("new", 0)
-    critical_count = by_urgency.get("critical", 0)
-
-    # Last 10 records sorted by timestamp descending
-    sorted_items = sorted(items, key=lambda x: x.get("timestamp", ""), reverse=True)
-    last_10 = [
-        {
-            "intake_id":    item.get("intake_id"),
-            "timestamp":    item.get("timestamp"),
-            "client_name":  item.get("client_name"),
-            "case_type":    item.get("case_type"),
-            "viability_score": int(item.get("viability_score", 0)),
-            "urgency":      item.get("urgency"),
-            "status":       item.get("status"),
-            "statute_of_limitations_flag": item.get("statute_of_limitations_flag", False),
-        }
-        for item in sorted_items[:10]
-    ]
-
-    # ------------------------------------------------------------------
-    # BLOCK 3: Return JSON
-    # ------------------------------------------------------------------
-    payload = {
-        "total_intakes":    total,
-        "avg_viability":    avg_viability,
-        "new_unreviewed":   new_count,
-        "critical_urgency": critical_count,
-        "by_case_type":     dict(by_case_type),
-        "by_urgency":       dict(by_urgency),
-        "by_status":        dict(by_status),
-        "last_10_intakes":  last_10,
+    record = {
+        "intake_id":                   intake_id,
+        "timestamp":                   timestamp,
+        "client_name":                 client_name,
+        "client_email":                client_email,
+        "client_phone":                client_phone,
+        "incident_date":               incident_date,
+        "prior_attorney":              prior_attorney,
+        "raw_description":             description,
+        "case_type":                   ai_result["case_type"],
+        "viability_score":             ai_result["viability_score"],
+        "urgency":                     ai_result["urgency"],
+        "statute_of_limitations_flag": ai_result["statute_of_limitations_flag"],
+        "key_facts":                   ai_result["key_facts"],
+        "recommended_specialty":       ai_result["recommended_specialty"],
+        "recommended_action":          ai_result["recommended_action"],
+        "client_acknowledgment":       ai_result["client_acknowledgment"],
+        "ai_model_used":               "claude-haiku-4-5",
+        "status":                      "new",
+        "attorney_note":               "",
     }
 
-    logger.info(
-        "Dashboard aggregation complete | total=%d | avg_viability=%s | critical=%d",
-        total, avg_viability, critical_count,
-    )
+    # Save to DynamoDB
+    try:
+        db.put_item(table_name=DYNAMODB_TABLE, item=record, region=AWS_REGION)
+        logger.info("DynamoDB record saved | intake_id=%s", intake_id)
+    except Exception as e:
+        logger.error("DynamoDB save failed | error=%s", str(e))
+        return _response(500, {"error": "Failed to save intake record."})
 
-    return _response(200, payload)
+    # Send emails
+    try:
+        emailer.send_client_confirmation(
+            to_email=client_email,
+            client_name=client_name,
+            acknowledgment=ai_result["client_acknowledgment"],
+            intake_id=intake_id,
+            from_email=FROM_EMAIL,
+            region=AWS_REGION,
+        )
+        emailer.send_attorney_alert(
+            to_email=ATTORNEY_EMAIL,
+            intake=record,
+            from_email=FROM_EMAIL,
+            region=AWS_REGION,
+        )
+        logger.info("Emails sent | intake_id=%s", intake_id)
+    except Exception as e:
+        logger.warning("Email sending failed | error=%s", str(e))
+
+    logger.info("Intake complete | intake_id=%s", intake_id)
+    return _response(200, {
+        "intake_id": intake_id,
+        "message":   "Your inquiry has been received. We will be in touch shortly.",
+        "status":    "received",
+    })"""
+lexflow-intake Lambda handler.
+Receives client intake form submissions, runs AI classification,
+saves to DynamoDB, and sends confirmation emails.
+"""
+import json
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+
+import ai_classifier
+import db
+import emailer
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+DYNAMODB_TABLE  = os.environ["DYNAMODB_TABLE_NAME"]
+ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
+ATTORNEY_EMAIL  = os.environ["ATTORNEY_EMAIL"]
+FROM_EMAIL      = os.environ["FROM_EMAIL"]
+AWS_REGION      = os.environ.get("AWS_REGION", "us-east-1")
+
+REQUIRED_FIELDS = {"client_name", "client_email", "client_phone", "incident_date", "description"}
+
+def _cors_headers() -> dict:
+    return {
+        "Access-Control-Allow-Origin":  "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST,OPTIONS",
+    }
+
+def _response(status_code: int, body: dict) -> dict:
+    return {
+        "statusCode": status_code,
+        "headers": {**_cors_headers(), "Content-Type": "application/json"},
+        "body": json.dumps(body, default=str),
+    }
+
+def lambda_handler(event, context):
+    # Handle CORS preflight
+    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    if method == "OPTIONS":
+        return _response(200, {})
+
+    logger.info("Intake request received")
+
+    # Parse body
+    try:
+        raw_body = event.get("body", "{}")
+        if isinstance(raw_body, str):
+            body = json.loads(raw_body)
+        else:
+            body = raw_body or {}
+    except json.JSONDecodeError as e:
+        logger.error("Invalid JSON body | error=%s", str(e))
+        return _response(400, {"error": "Invalid JSON in request body."})
+
+    # Validate required fields
+    missing = REQUIRED_FIELDS - body.keys()
+    if missing:
+        logger.warning("Missing required fields | fields=%s", missing)
+        return _response(400, {"error": f"Missing required fields: {sorted(missing)}"})
+
+    client_name    = body["client_name"].strip()
+    client_email   = body["client_email"].strip()
+    client_phone   = body["client_phone"].strip()
+    incident_date  = body["incident_date"].strip()
+    description    = body["description"].strip()
+    prior_attorney = bool(body.get("prior_attorney", False))
+
+    # Run AI classification
+    try:
+        ai_result = ai_classifier.classify(
+            name=client_name,
+            description=description,
+            incident_date=incident_date,
+            prior_attorney=prior_attorney,
+            api_key=ANTHROPIC_KEY,
+        )
+        logger.info(
+            "AI classification complete | case_type=%s | score=%s | urgency=%s",
+            ai_result["case_type"], ai_result["viability_score"], ai_result["urgency"]
+        )
+    except Exception as e:
+        logger.error("AI classification failed | error=%s", str(e))
+        return _response(500, {"error": "AI classification failed. Please try again."})
+
+    # Build record
+    intake_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    record = {
+        "intake_id":                   intake_id,
+        "timestamp":                   timestamp,
+        "client_name":                 client_name,
+        "client_email":                client_email,
+        "client_phone":                client_phone,
+        "incident_date":               incident_date,
+        "prior_attorney":              prior_attorney,
+        "raw_description":             description,
+        "case_type":                   ai_result["case_type"],
+        "viability_score":             ai_result["viability_score"],
+        "urgency":                     ai_result["urgency"],
+        "statute_of_limitations_flag": ai_result["statute_of_limitations_flag"],
+        "key_facts":                   ai_result["key_facts"],
+        "recommended_specialty":       ai_result["recommended_specialty"],
+        "recommended_action":          ai_result["recommended_action"],
+        "client_acknowledgment":       ai_result["client_acknowledgment"],
+        "ai_model_used":               "claude-haiku-4-5",
+        "status":                      "new",
+        "attorney_note":               "",
+    }
+
+    # Save to DynamoDB
+    try:
+        db.put_item(table_name=DYNAMODB_TABLE, item=record, region=AWS_REGION)
+        logger.info("DynamoDB record saved | intake_id=%s", intake_id)
+    except Exception as e:
+        logger.error("DynamoDB save failed | error=%s", str(e))
+        return _response(500, {"error": "Failed to save intake record."})
+
+    # Send emails
+    try:
+        emailer.send_client_confirmation(
+            to_email=client_email,
+            client_name=client_name,
+            acknowledgment=ai_result["client_acknowledgment"],
+            intake_id=intake_id,
+            from_email=FROM_EMAIL,
+            region=AWS_REGION,
+        )
+        emailer.send_attorney_alert(
+            to_email=ATTORNEY_EMAIL,
+            intake=record,
+            from_email=FROM_EMAIL,
+            region=AWS_REGION,
+        )
+        logger.info("Emails sent | intake_id=%s", intake_id)
+    except Exception as e:
+        logger.warning("Email sending failed | error=%s", str(e))
+
+    logger.info("Intake complete | intake_id=%s", intake_id)
+    return _response(200, {
+        "intake_id": intake_id,
+        "message":   "Your inquiry has been received. We will be in touch shortly.",
+        "status":    "received",
+    })
