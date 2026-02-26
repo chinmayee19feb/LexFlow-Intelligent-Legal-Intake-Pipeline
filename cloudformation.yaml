@@ -121,6 +121,7 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:Scan
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt LexFlowTable.Arn
 
               - Sid: SESAccess
@@ -139,9 +140,6 @@ Resources:
                 Resource: "arn:aws:logs:*:*:*"
 
   # ── Compute ───────────────────────────────────────────────────────────────
-  # NOTE: Lambda code is deployed separately after stack creation.
-  # Use the deploy script (see README) to package and upload the zip files.
-  # The ZipFile below is a placeholder that will be replaced on first deploy.
 
   IntakeLambda:
     Type: AWS::Lambda::Function
@@ -222,6 +220,8 @@ Resources:
         "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardLambda.Arn}/invocations"
       PayloadFormatVersion: "2.0"
 
+  # ── Routes ───────────────────────────────────────────────────────────────
+
   IntakeRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -234,6 +234,27 @@ Resources:
     Properties:
       ApiId: !Ref LexFlowApi
       RouteKey: "GET /dashboard"
+      Target: !Sub "integrations/${DashboardIntegration}"
+
+  CaseDetailRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LexFlowApi
+      RouteKey: "GET /case/{intake_id}"
+      Target: !Sub "integrations/${DashboardIntegration}"
+
+  CaseStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LexFlowApi
+      RouteKey: "POST /case/{intake_id}/status"
+      Target: !Sub "integrations/${DashboardIntegration}"
+
+  CaseOptionsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LexFlowApi
+      RouteKey: "OPTIONS /case/{intake_id}"
       Target: !Sub "integrations/${DashboardIntegration}"
 
   ApiStage:
@@ -251,7 +272,7 @@ Resources:
       FunctionName: !GetAtt IntakeLambda.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LexFlowApi}/*/*/intake"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LexFlowApi}/*/*"
 
   DashboardLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -259,7 +280,7 @@ Resources:
       FunctionName: !GetAtt DashboardLambda.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LexFlowApi}/*/*/dashboard"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LexFlowApi}/*/*"
 
 # ---------------------------------------------------------------------------
 # Outputs
