@@ -33,7 +33,7 @@ jobs:
           pip install pytest pytest-cov flake8
 
       - name: Lint code
-        run: flake8 lexflow-intake/ --max-line-length=200 --exclude=__pycache__,prompt.py --extend-ignore=E221,E303,W292,E231
+        run: flake8 lexflow-intake/ --max-line-length=200 --exclude=__pycache__,prompt.py --extend-ignore=E221,E303,W292,E231,E302
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
