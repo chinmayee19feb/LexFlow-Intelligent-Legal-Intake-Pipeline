@@ -1,0 +1,139 @@
+name: LexFlow CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ─────────────────────────────
+  # JOB 1: Run Tests
+  # ─────────────────────────────
+  test:
+    name: "🧪 Run Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r lexflow-intake/requirements.txt
+          pip install pytest pytest-cov flake8
+
+      - name: Lint code
+        run: flake8 lexflow-intake/ --max-line-length=120 --exclude=__pycache__
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+        env:
+          ENVIRONMENT: test
+
+  # ─────────────────────────────
+  # JOB 2: Deploy to AWS
+  # ─────────────────────────────
+  deploy:
+    name: "🚀 Deploy to AWS"
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Package intake Lambda
+        run: |
+          mkdir -p dist/intake
+          pip install -r lexflow-intake/requirements.txt -t dist/intake --quiet
+          cp lexflow-intake/handler.py dist/intake/
+          cp lexflow-intake/ai_classifier.py dist/intake/
+          cp lexflow-intake/prompt.py dist/intake/
+          cp lexflow-intake/emailer.py dist/intake/
+          cp lexflow-intake/db.py dist/intake/
+          cd dist/intake
+          zip -r ../../intake-lambda.zip . -x "*.pyc" -x "*__pycache__*"
+          cd ../..
+          echo "✅ Intake package: $(du -sh intake-lambda.zip | cut -f1)"
+
+      - name: Package dashboard Lambda
+        run: |
+          mkdir -p dist/dashboard
+          cp lexflow-dashboard/handler.py dist/dashboard/
+          cp lexflow-dashboard/db.py dist/dashboard/
+          cd dist/dashboard
+          zip -r ../../dashboard-lambda.zip . -x "*.pyc" -x "*__pycache__*"
+          cd ../..
+          echo "✅ Dashboard package: $(du -sh dashboard-lambda.zip | cut -f1)"
+
+      - name: Deploy intake Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name lexflow-intake \
+            --zip-file fileb://intake-lambda.zip \
+            --region ${{ env.AWS_REGION }} \
+            --output text --query 'CodeSize' \
+            | xargs -I{} echo "✅ lexflow-intake deployed ({} bytes)"
+
+      - name: Deploy dashboard Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name lexflow-dashboard \
+            --zip-file fileb://dashboard-lambda.zip \
+            --region ${{ env.AWS_REGION }} \
+            --output text --query 'CodeSize' \
+            | xargs -I{} echo "✅ lexflow-dashboard deployed ({} bytes)"
+
+      - name: Wait for Lambdas to be ready
+        run: |
+          aws lambda wait function-updated \
+            --function-name lexflow-intake \
+            --region ${{ env.AWS_REGION }}
+          aws lambda wait function-updated \
+            --function-name lexflow-dashboard \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Both Lambdas are live"
+
+      - name: Smoke test
+        run: |
+          API="https://7t8pa65z48.execute-api.us-east-1.amazonaws.com"
+          HTTP=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "$API/intake" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "client_name": "CI Smoke Test",
+              "client_email": "ci@lexflow.io",
+              "client_phone": "+10000000000",
+              "incident_date": "2025-01-01",
+              "prior_attorney": false,
+              "description": "Automated post-deploy smoke test."
+            }')
+          echo "Response: $(cat response.json)"
+          if [ "$HTTP" != "200" ]; then
+            echo "❌ Smoke test failed — HTTP $HTTP"
+            exit 1
+          fi
+          echo "✅ Smoke test passed"
