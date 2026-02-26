@@ -17,10 +17,18 @@ REQUIRED_KEYS = {
 }
 
 VALID_CASE_TYPES = {
+    # Personal Injury
     "Personal Injury - Vehicle Accident",
     "Personal Injury - Slip and Fall",
     "Personal Injury - Medical Malpractice",
     "Personal Injury - Workplace Injury",
+    # Defamation & False Accusation
+    "Defamation - Libel (Written)",
+    "Defamation - Slander (Spoken)",
+    "Malicious Prosecution - False Criminal Accusation",
+    "Malicious Prosecution - Workplace False Accusation",
+    "Malicious Prosecution - False Sexual Misconduct Accusation",
+    # Other
     "Family Law",
     "Employment Law",
     "Out of Scope",
