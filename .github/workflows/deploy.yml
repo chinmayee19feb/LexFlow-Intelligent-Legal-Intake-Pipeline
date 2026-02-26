@@ -137,3 +137,16 @@ jobs:
             exit 1
           fi
           echo "✅ Smoke test passed"
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 cp dashboard/index.html \
+            s3://lexflow-dashboard-097659826330/index.html \
+            --content-type "text/html" \
+            --region ${{ env.AWS_REGION }}
+
+          aws s3 cp intake-form/index.html \
+            s3://lexflow-intake-form-097659826330/index.html \
+            --content-type "text/html" \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ Frontend deployed to S3"
