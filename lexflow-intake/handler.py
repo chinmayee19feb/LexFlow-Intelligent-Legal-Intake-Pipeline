@@ -123,11 +123,11 @@ def lambda_handler(event, context):
 
     # Send emails
     try:
-        emailer.send_client_confirmation(
+        emailer.send_client_ack(
             to_email=client_email,
             client_name=client_name,
-            acknowledgment=ai_result["client_acknowledgment"],
-            intake_id=intake_id,
+            case_type=ai_result["case_type"],
+            acknowledgment_text=ai_result["client_acknowledgment"],
             from_email=FROM_EMAIL,
             region=AWS_REGION,
         )
