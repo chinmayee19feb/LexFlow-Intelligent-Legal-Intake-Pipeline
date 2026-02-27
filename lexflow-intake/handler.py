@@ -6,7 +6,6 @@ saves to DynamoDB, and sends confirmation emails.
 import json
 import logging
 import os
-import hashlib
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -26,12 +25,20 @@ AWS_REGION      = os.environ.get("AWS_REGION", "us-east-1")
 
 REQUIRED_FIELDS = {"client_name", "client_email", "client_phone", "incident_date", "description"}
 
+PORTAL_CORS_HEADERS = {
+    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,OPTIONS",
+}
+
+
 def _cors_headers() -> dict:
     return {
         "Access-Control-Allow-Origin":  "*",
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Allow-Methods": "POST,OPTIONS",
     }
+
 
 def _response(status_code: int, body: dict) -> dict:
     return {
@@ -40,11 +47,48 @@ def _response(status_code: int, body: dict) -> dict:
         "body": json.dumps(body, default=str),
     }
 
+
+def handle_portal(event):
+    """GET /portal?token=xxx — returns case status for client portal."""
+    params = event.get("queryStringParameters") or {}
+    token = params.get("token", "").strip()
+
+    if not token:
+        return {
+            "statusCode": 400,
+            "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
+            "body": json.dumps({"error": "Missing token."}),
+        }
+
+    record = db.get_by_token(
+        table_name=DYNAMODB_TABLE,
+        portal_token=token,
+        region=AWS_REGION,
+    )
+
+    if not record:
+        return {
+            "statusCode": 404,
+            "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
+            "body": json.dumps({"error": "Case not found. Your link may have expired."}),
+        }
+
+    safe = {
+        "client_name":   record.get("client_name"),
+        "case_type":     record.get("case_type"),
+        "status":        record.get("status", "new"),
+        "timestamp":     record.get("timestamp"),
+        "incident_date": record.get("incident_date"),
+    }
+    return {
+        "statusCode": 200,
+        "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
+        "body": json.dumps(safe, default=str),
+    }
+
+
 def lambda_handler(event, context):
-    # Handle CORS preflight
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
-    if method == "OPTIONS":
-        return _response(200, {})
 
     # Route to portal handler if path is /portal
     path = event.get("rawPath", "")
@@ -52,6 +96,10 @@ def lambda_handler(event, context):
         if method == "OPTIONS":
             return {"statusCode": 200, "headers": PORTAL_CORS_HEADERS, "body": ""}
         return handle_portal(event)
+
+    # Handle CORS preflight for intake
+    if method == "OPTIONS":
+        return _response(200, {})
 
     logger.info("Intake request received")
 
@@ -159,50 +207,3 @@ def lambda_handler(event, context):
         "message":   "Your inquiry has been received. We will be in touch shortly.",
         "status":    "received",
     })
-
-    REQUIRED_FIELDS = {"client_name", "client_email", "client_phone", "incident_date", "description"}
-    PORTAL_CORS_HEADERS = {
-    "Access-Control-Allow-Origin":  "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET,OPTIONS",
-}
-
-
-def handle_portal(event):
-    """GET /portal?token=xxx — returns case status for client portal."""
-    params = event.get("queryStringParameters") or {}
-    token = params.get("token", "").strip()
-
-    if not token:
-        return {
-            "statusCode": 400,
-            "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
-            "body": json.dumps({"error": "Missing token."}),
-        }
-
-    record = db.get_by_token(
-        table_name=DYNAMODB_TABLE,
-        portal_token=token,
-        region=AWS_REGION,
-    )
-
-    if not record:
-        return {
-            "statusCode": 404,
-            "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
-            "body": json.dumps({"error": "Case not found. Your link may have expired."}),
-        }
-
-    # Return only what the client needs — never expose attorney notes or AI internals
-    safe = {
-        "client_name":   record.get("client_name"),
-        "case_type":     record.get("case_type"),
-        "status":        record.get("status", "new"),
-        "timestamp":     record.get("timestamp"),
-        "incident_date": record.get("incident_date"),
-    }
-    return {
-        "statusCode": 200,
-        "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
-        "body": json.dumps(safe, default=str),
-    }
