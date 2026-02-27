@@ -412,6 +412,85 @@
 
 <script>
   const API = 'https://7t8pa65z48.execute-api.us-east-1.amazonaws.com';
+
+// ── Cognito Auth Config ──────────────────────────────────────────
+const COGNITO_DOMAIN = 'https://lexflow-attorneys.auth.us-east-1.amazoncognito.com';
+const CLIENT_ID      = '6b34prcv3cj6mioe15b8o6hbh0';
+const REDIRECT_URI   = 'https://d18dh3vfl8g5tq.cloudfront.net';
+const SCOPES         = 'email openid profile';
+
+function getLoginUrl() {
+  return `${COGNITO_DOMAIN}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`;
+}
+
+function getLogoutUrl() {
+  return `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
+}
+
+function saveTokens(tokens) {
+  sessionStorage.setItem('access_token', tokens.access_token);
+  sessionStorage.setItem('id_token', tokens.id_token);
+  if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
+}
+
+function getAccessToken() {
+  return sessionStorage.getItem('access_token');
+}
+
+function clearTokens() {
+  sessionStorage.removeItem('access_token');
+  sessionStorage.removeItem('id_token');
+  sessionStorage.removeItem('refresh_token');
+}
+
+async function exchangeCodeForTokens(code) {
+  const body = new URLSearchParams({
+    grant_type:   'authorization_code',
+    client_id:    CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    code:         code,
+  });
+  const res = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    body.toString(),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  return res.json();
+}
+
+function authHeaders() {
+  const token = getAccessToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+async function initAuth() {
+  const params = new URLSearchParams(window.location.search);
+  const code   = params.get('code');
+
+  if (code) {
+    // Exchange code for tokens
+    try {
+      const tokens = await exchangeCodeForTokens(code);
+      saveTokens(tokens);
+      // Clean URL
+      window.history.replaceState({}, document.title, REDIRECT_URI);
+    } catch (e) {
+      console.error('Token exchange failed:', e);
+      window.location.href = getLoginUrl();
+      return false;
+    }
+  }
+
+  if (!getAccessToken()) {
+    window.location.href = getLoginUrl();
+    return false;
+  }
+
+  // Show logout button
+  document.getElementById('logoutBtn').style.display = 'inline-block';
+  return true;
+}
   let caseTypeChart = null;
   let urgencyChart = null;
 
