@@ -49,6 +49,19 @@
   .live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   .last-updated { font-size: 12px; color: var(--text-dim); }
+  .logout-btn {
+    display: none;
+    padding: 6px 14px;
+    background: rgba(239,68,68,0.15);
+    color: #EF4444;
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    transition: background 0.2s;
+  }
+  .logout-btn:hover { background: rgba(239,68,68,0.25); }
 
   /* Layout */
   .container { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
@@ -113,7 +126,7 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .empty-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
 
-  /* ── Case Detail Panel ─────────────────────────────────── */
+  /* Case Detail Panel */
   .panel-overlay {
     display: none;
     position: fixed;
@@ -123,7 +136,6 @@
     backdrop-filter: blur(2px);
   }
   .panel-overlay.open { display: block; }
-
   .panel {
     position: fixed;
     top: 0;
@@ -139,7 +151,6 @@
     flex-direction: column;
   }
   .panel.open { right: 0; }
-
   .panel-header {
     padding: 20px 24px;
     border-bottom: 1px solid var(--border);
@@ -153,166 +164,67 @@
   }
   .panel-title { font-size: 16px; font-weight: 600; }
   .panel-close {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
   }
   .panel-close:hover { background: var(--bg-card-hover); color: var(--text); }
-
   .panel-body { padding: 24px; flex: 1; }
-
   .panel-section { margin-bottom: 24px; }
   .panel-section-title {
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
   }
-
-  /* Score row in panel */
-  .score-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-  .score-big {
-    font-family: 'Playfair Display', serif;
-    font-size: 56px;
-    font-weight: 400;
-    line-height: 1;
-  }
+  .score-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .score-big { font-family: 'Playfair Display', serif; font-size: 56px; font-weight: 400; line-height: 1; }
   .score-big.high { color: var(--green); }
   .score-big.mid { color: var(--yellow); }
   .score-big.low { color: var(--red); }
   .score-big span { font-size: 24px; color: var(--text-dim); }
-
-  /* Info grid */
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .info-item { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px 14px; }
   .info-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
   .info-value { font-size: 14px; color: var(--text); font-weight: 500; }
-
-  /* Key facts */
   .key-facts { list-style: none; display: flex; flex-direction: column; gap: 8px; }
   .key-facts li {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: 14px;
-    color: var(--text-muted);
-    padding: 10px 12px;
-    background: rgba(0,0,0,0.2);
-    border-radius: 8px;
-    line-height: 1.5;
+    display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text-muted);
+    padding: 10px 12px; background: rgba(0,0,0,0.2); border-radius: 8px; line-height: 1.5;
   }
   .key-facts li::before { content: "•"; color: var(--gold); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
-
-  /* Recommended action */
   .action-box {
-    background: rgba(37,99,235,0.1);
-    border: 1px solid rgba(37,99,235,0.3);
-    border-radius: 8px;
-    padding: 14px 16px;
-    font-size: 14px;
-    color: var(--blue-light);
-    line-height: 1.6;
+    background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.3);
+    border-radius: 8px; padding: 14px 16px; font-size: 14px; color: var(--blue-light); line-height: 1.6;
   }
-
-  /* Description */
   .description-box {
-    background: rgba(0,0,0,0.2);
-    border-radius: 8px;
-    padding: 14px 16px;
-    font-size: 14px;
-    color: var(--text-muted);
-    line-height: 1.7;
-    font-style: italic;
+    background: rgba(0,0,0,0.2); border-radius: 8px; padding: 14px 16px;
+    font-size: 14px; color: var(--text-muted); line-height: 1.7; font-style: italic;
   }
-
-  /* Attorney note */
   .note-input {
-    width: 100%;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    color: var(--text);
-    font-size: 14px;
-    font-family: 'DM Sans', sans-serif;
-    resize: vertical;
-    min-height: 80px;
-    margin-bottom: 12px;
-    transition: border-color 0.2s;
+    width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif;
+    resize: vertical; min-height: 80px; margin-bottom: 12px; transition: border-color 0.2s;
   }
   .note-input:focus { outline: none; border-color: var(--blue); }
   .note-input::placeholder { color: var(--text-dim); }
-
-  /* Action buttons */
   .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
   .btn {
-    padding: 14px 20px;
-    border-radius: 10px;
-    border: none;
-    font-size: 14px;
-    font-weight: 600;
-    font-family: 'DM Sans', sans-serif;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    padding: 14px 20px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600;
+    font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .btn-accept {
-    background: var(--green);
-    color: #0F172A;
-  }
+  .btn-accept { background: var(--green); color: #0F172A; }
   .btn-accept:hover:not(:disabled) { background: #16a34a; transform: translateY(-1px); }
-
-  .btn-decline {
-    background: rgba(239,68,68,0.15);
-    color: var(--red);
-    border: 1px solid rgba(239,68,68,0.3);
-  }
+  .btn-decline { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
   .btn-decline:hover:not(:disabled) { background: rgba(239,68,68,0.25); transform: translateY(-1px); }
-
-  /* Toast notification */
   .toast {
-    position: fixed;
-    bottom: 32px;
-    right: 32px;
-    padding: 14px 20px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 300;
-    transform: translateY(100px);
-    opacity: 0;
-    transition: all 0.3s ease;
-    max-width: 320px;
+    position: fixed; bottom: 32px; right: 32px; padding: 14px 20px; border-radius: 10px;
+    font-size: 14px; font-weight: 500; z-index: 300; transform: translateY(100px); opacity: 0;
+    transition: all 0.3s ease; max-width: 320px;
   }
   .toast.show { transform: translateY(0); opacity: 1; }
   .toast.success { background: var(--green); color: #0F172A; }
   .toast.error { background: var(--red); color: white; }
-
-  /* Panel loading */
   .panel-loading { display: flex; align-items: center; justify-content: center; padding: 60px; gap: 12px; color: var(--text-muted); }
 
   @media (max-width: 900px) {
@@ -337,6 +249,7 @@
       Live
     </div>
     <div class="last-updated" id="lastUpdated">Loading...</div>
+    <button class="logout-btn" id="logoutBtn" onclick="logout()">Logout</button>
   </div>
 </header>
 
@@ -413,88 +326,90 @@
 <script>
   const API = 'https://7t8pa65z48.execute-api.us-east-1.amazonaws.com';
 
-// ── Cognito Auth Config ──────────────────────────────────────────
-const COGNITO_DOMAIN = 'https://lexflow-attorneys.auth.us-east-1.amazoncognito.com';
-const CLIENT_ID      = '6b34prcv3cj6mioe15b8o6hbh0';
-const REDIRECT_URI   = 'https://d18dh3vfl8g5tq.cloudfront.net';
-const SCOPES         = 'email openid profile';
+  // ── Cognito Auth Config ──────────────────────────────────────────
+  const COGNITO_DOMAIN = 'https://lexflow-attorneys.auth.us-east-1.amazoncognito.com';
+  const CLIENT_ID      = '6b34prcv3cj6mioe15b8o6hbh0';
+  const REDIRECT_URI   = 'https://d18dh3vfl8g5tq.cloudfront.net';
+  const SCOPES         = 'email openid profile';
 
-function getLoginUrl() {
-  return `${COGNITO_DOMAIN}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`;
-}
+  function getLoginUrl() {
+    return `${COGNITO_DOMAIN}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`;
+  }
 
-function getLogoutUrl() {
-  return `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
-}
+  function getLogoutUrl() {
+    return `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
+  }
 
-function saveTokens(tokens) {
-  sessionStorage.setItem('access_token', tokens.access_token);
-  sessionStorage.setItem('id_token', tokens.id_token);
-  if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
-}
+  function saveTokens(tokens) {
+    sessionStorage.setItem('access_token', tokens.access_token);
+    sessionStorage.setItem('id_token', tokens.id_token);
+    if (tokens.refresh_token) sessionStorage.setItem('refresh_token', tokens.refresh_token);
+  }
 
-function getAccessToken() {
-  return sessionStorage.getItem('access_token');
-}
+  function getAccessToken() {
+    return sessionStorage.getItem('access_token');
+  }
 
-function clearTokens() {
-  sessionStorage.removeItem('access_token');
-  sessionStorage.removeItem('id_token');
-  sessionStorage.removeItem('refresh_token');
-}
+  function clearTokens() {
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('id_token');
+    sessionStorage.removeItem('refresh_token');
+  }
 
-async function exchangeCodeForTokens(code) {
-  const body = new URLSearchParams({
-    grant_type:   'authorization_code',
-    client_id:    CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
-    code:         code,
-  });
-  const res = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    body.toString(),
-  });
-  if (!res.ok) throw new Error('Token exchange failed');
-  return res.json();
-}
+  async function exchangeCodeForTokens(code) {
+    const body = new URLSearchParams({
+      grant_type:   'authorization_code',
+      client_id:    CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      code:         code,
+    });
+    const res = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    body.toString(),
+    });
+    if (!res.ok) throw new Error('Token exchange failed');
+    return res.json();
+  }
 
-function authHeaders() {
-  const token = getAccessToken();
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-}
+  function authHeaders() {
+    const token = getAccessToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
 
-async function initAuth() {
-  const params = new URLSearchParams(window.location.search);
-  const code   = params.get('code');
+  async function initAuth() {
+    const params = new URLSearchParams(window.location.search);
+    const code   = params.get('code');
 
-  if (code) {
-    // Exchange code for tokens
-    try {
-      const tokens = await exchangeCodeForTokens(code);
-      saveTokens(tokens);
-      // Clean URL
-      window.history.replaceState({}, document.title, REDIRECT_URI);
-    } catch (e) {
-      console.error('Token exchange failed:', e);
+    if (code) {
+      try {
+        const tokens = await exchangeCodeForTokens(code);
+        saveTokens(tokens);
+        window.history.replaceState({}, document.title, REDIRECT_URI);
+      } catch (e) {
+        console.error('Token exchange failed:', e);
+        window.location.href = getLoginUrl();
+        return false;
+      }
+    }
+
+    if (!getAccessToken()) {
       window.location.href = getLoginUrl();
       return false;
     }
+
+    document.getElementById('logoutBtn').style.display = 'inline-block';
+    return true;
   }
 
-  if (!getAccessToken()) {
-    window.location.href = getLoginUrl();
-    return false;
+  function logout() {
+    clearTokens();
+    window.location.href = getLogoutUrl();
   }
-
-  // Show logout button
-  document.getElementById('logoutBtn').style.display = 'inline-block';
-  return true;
-}
-  let caseTypeChart = null;
-  let urgencyChart = null;
 
   // ── Helpers ──────────────────────────────────────────────
+  let caseTypeChart = null;
+  let urgencyChart = null;
 
   function formatDate(ts) {
     if (!ts) return '—';
@@ -624,7 +539,12 @@ async function initAuth() {
 
   async function fetchDashboard() {
     try {
-      const res = await fetch(`${API}/dashboard`);
+      const res = await fetch(`${API}/dashboard`, { headers: authHeaders() });
+      if (res.status === 401) {
+        clearTokens();
+        window.location.href = getLoginUrl();
+        return;
+      }
       if (!res.ok) throw new Error('API error');
       const data = await res.json();
       updateKPIs(data);
@@ -652,7 +572,7 @@ async function initAuth() {
     `;
 
     try {
-      const res = await fetch(`${API}/case/${intakeId}`);
+      const res = await fetch(`${API}/case/${intakeId}`, { headers: authHeaders() });
       if (!res.ok) throw new Error('Failed to load case');
       const c = await res.json();
       renderPanel(c);
@@ -671,12 +591,9 @@ async function initAuth() {
   function renderPanel(c) {
     const score = parseInt(c.viability_score) || 0;
     const isActioned = c.status === 'active' || c.status === 'declined' || c.status === 'closed';
-
     const keyFactsHtml = (c.key_facts || []).map(f => `<li>${f}</li>`).join('');
 
     document.getElementById('panelBody').innerHTML = `
-
-      <!-- Score + Status -->
       <div class="panel-section">
         <div class="score-row">
           <div class="score-big ${scoreBigClass(score)}">${score}<span>/10</span></div>
@@ -689,74 +606,44 @@ async function initAuth() {
         <div style="font-size:13px;color:var(--text-muted)">${c.recommended_specialty || ''}</div>
       </div>
 
-      <!-- Client Info -->
       <div class="panel-section">
         <div class="panel-section-title">Client Information</div>
         <div class="info-grid">
-          <div class="info-item">
-            <div class="info-label">Name</div>
-            <div class="info-value">${c.client_name || '—'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Incident Date</div>
-            <div class="info-value">${c.incident_date || '—'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Email</div>
-            <div class="info-value" style="font-size:13px">${c.client_email || '—'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Phone</div>
-            <div class="info-value">${c.client_phone || '—'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Prior Attorney</div>
-            <div class="info-value">${c.prior_attorney ? '⚠️ Yes' : '✅ No'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">SOL Flag</div>
-            <div class="info-value">${c.statute_of_limitations_flag ? '⚠️ Concern' : '✅ Clear'}</div>
-          </div>
+          <div class="info-item"><div class="info-label">Name</div><div class="info-value">${c.client_name || '—'}</div></div>
+          <div class="info-item"><div class="info-label">Incident Date</div><div class="info-value">${c.incident_date || '—'}</div></div>
+          <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:13px">${c.client_email || '—'}</div></div>
+          <div class="info-item"><div class="info-label">Phone</div><div class="info-value">${c.client_phone || '—'}</div></div>
+          <div class="info-item"><div class="info-label">Prior Attorney</div><div class="info-value">${c.prior_attorney ? '⚠️ Yes' : '✅ No'}</div></div>
+          <div class="info-item"><div class="info-label">SOL Flag</div><div class="info-value">${c.statute_of_limitations_flag ? '⚠️ Concern' : '✅ Clear'}</div></div>
         </div>
       </div>
 
-      <!-- Key Facts -->
       <div class="panel-section">
         <div class="panel-section-title">AI Key Facts</div>
         <ul class="key-facts">${keyFactsHtml}</ul>
       </div>
 
-      <!-- Recommended Action -->
       <div class="panel-section">
         <div class="panel-section-title">Recommended Action</div>
         <div class="action-box">💡 ${c.recommended_action || '—'}</div>
       </div>
 
-      <!-- Client Description -->
       <div class="panel-section">
         <div class="panel-section-title">Client's Description</div>
         <div class="description-box">"${c.raw_description || '—'}"</div>
       </div>
 
-      <!-- Accept / Decline -->
       <div class="panel-section">
         <div class="panel-section-title">Attorney Decision</div>
         ${isActioned
           ? `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:14px">
                This case has already been actioned: ${statusBadge(c.status)}
              </div>`
-          : `<textarea
-               class="note-input"
-               id="attorneyNote"
-               placeholder="Add a note (optional) — e.g. Strong case, scheduling consultation..."
-             ></textarea>
+          : `<textarea class="note-input" id="attorneyNote"
+               placeholder="Add a note (optional) — e.g. Strong case, scheduling consultation..."></textarea>
              <div class="action-buttons">
-               <button class="btn btn-accept" onclick="updateStatus('${c.intake_id}', 'active')">
-                 ✅ Accept Case
-               </button>
-               <button class="btn btn-decline" onclick="updateStatus('${c.intake_id}', 'declined')">
-                 ❌ Decline Case
-               </button>
+               <button class="btn btn-accept" onclick="updateStatus('${c.intake_id}', 'active')">✅ Accept Case</button>
+               <button class="btn btn-decline" onclick="updateStatus('${c.intake_id}', 'declined')">❌ Decline Case</button>
              </div>`
         }
       </div>
@@ -771,16 +658,13 @@ async function initAuth() {
     try {
       const res = await fetch(`${API}/case/${intakeId}/status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ status: newStatus, note: note })
       });
 
       if (!res.ok) throw new Error('Update failed');
-      const data = await res.json();
-
       const label = newStatus === 'active' ? 'accepted ✅' : 'declined ❌';
       showToast(`Case ${label} successfully`, newStatus === 'active' ? 'success' : 'error');
-
       closePanel();
       fetchDashboard();
 
@@ -790,14 +674,17 @@ async function initAuth() {
     }
   }
 
-  // Keyboard: ESC closes panel
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closePanel();
   });
 
-  // Init
-  fetchDashboard();
-  setInterval(fetchDashboard, 30000);
+  // ── Init ─────────────────────────────────────────────────
+  initAuth().then(authenticated => {
+    if (authenticated) {
+      fetchDashboard();
+      setInterval(fetchDashboard, 30000);
+    }
+  });
 </script>
 </body>
 </html>
