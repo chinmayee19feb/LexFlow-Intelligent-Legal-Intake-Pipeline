@@ -155,3 +155,17 @@ jobs:
             --region ${{ env.AWS_REGION }}
 
           echo "✅ Frontend deployed to S3"
+
+      - name: Invalidate CloudFront caches
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id EFUCGEQ1QH4DD \
+            --paths "/*" \
+            --region ${{ env.AWS_REGION }}
+
+          aws cloudfront create-invalidation \
+            --distribution-id E2SRPMYGCK6O05 \
+            --paths "/*" \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ CloudFront caches invalidated"
