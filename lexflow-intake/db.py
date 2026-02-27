@@ -47,3 +47,16 @@ def scan_all(table_name: str, region: str = "us-east-1") -> list[dict]:
     except ClientError as e:
         logger.error("DynamoDB scan failed | error=%s", e.response["Error"]["Message"])
         raise
+def get_by_token(table_name: str, portal_token: str, region: str = "us-east-1") -> dict | None:
+    """
+    Look up an intake record by portal_token using a DynamoDB scan with filter.
+    Returns the record dict or None if not found.
+    """
+    table = get_table(table_name, region)
+    response = table.scan(
+        FilterExpression="portal_token = :token",
+        ExpressionAttributeValues={":token": portal_token},
+        Limit=1,
+    )
+    items = response.get("Items", [])
+    return items[0] if items else None

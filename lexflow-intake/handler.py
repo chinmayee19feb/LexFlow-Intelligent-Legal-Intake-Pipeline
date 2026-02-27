@@ -6,6 +6,8 @@ saves to DynamoDB, and sends confirmation emails.
 import json
 import logging
 import os
+import hashlib
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -43,6 +45,13 @@ def lambda_handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     if method == "OPTIONS":
         return _response(200, {})
+
+    # Route to portal handler if path is /portal
+    path = event.get("rawPath", "")
+    if path == "/portal":
+        if method == "OPTIONS":
+            return {"statusCode": 200, "headers": PORTAL_CORS_HEADERS, "body": ""}
+        return handle_portal(event)
 
     logger.info("Intake request received")
 
@@ -111,6 +120,7 @@ def lambda_handler(event, context):
         "ai_model_used":               "claude-haiku-4-5",
         "status":                      "new",
         "attorney_note":               "",
+        "portal_token":                secrets.token_urlsafe(32),
     }
 
     # Save to DynamoDB
@@ -123,11 +133,13 @@ def lambda_handler(event, context):
 
     # Send emails
     try:
+        portal_url = f"https://d18dh3vfl8g5tq.cloudfront.net/portal.html?token={record['portal_token']}"
         emailer.send_client_ack(
             to_email=client_email,
             client_name=client_name,
             case_type=ai_result["case_type"],
             acknowledgment_text=ai_result["client_acknowledgment"],
+            portal_url=portal_url,
             from_email=FROM_EMAIL,
             region=AWS_REGION,
         )
@@ -147,3 +159,50 @@ def lambda_handler(event, context):
         "message":   "Your inquiry has been received. We will be in touch shortly.",
         "status":    "received",
     })
+
+    REQUIRED_FIELDS = {"client_name", "client_email", "client_phone", "incident_date", "description"}
+    PORTAL_CORS_HEADERS = {
+    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,OPTIONS",
+}
+
+
+def handle_portal(event):
+    """GET /portal?token=xxx — returns case status for client portal."""
+    params = event.get("queryStringParameters") or {}
+    token = params.get("token", "").strip()
+
+    if not token:
+        return {
+            "statusCode": 400,
+            "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
+            "body": json.dumps({"error": "Missing token."}),
+        }
+
+    record = db.get_by_token(
+        table_name=DYNAMODB_TABLE,
+        portal_token=token,
+        region=AWS_REGION,
+    )
+
+    if not record:
+        return {
+            "statusCode": 404,
+            "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
+            "body": json.dumps({"error": "Case not found. Your link may have expired."}),
+        }
+
+    # Return only what the client needs — never expose attorney notes or AI internals
+    safe = {
+        "client_name":   record.get("client_name"),
+        "case_type":     record.get("case_type"),
+        "status":        record.get("status", "new"),
+        "timestamp":     record.get("timestamp"),
+        "incident_date": record.get("incident_date"),
+    }
+    return {
+        "statusCode": 200,
+        "headers": {**PORTAL_CORS_HEADERS, "Content-Type": "application/json"},
+        "body": json.dumps(safe, default=str),
+    }

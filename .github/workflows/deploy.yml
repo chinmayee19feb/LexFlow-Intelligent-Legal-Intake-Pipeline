@@ -144,6 +144,11 @@ jobs:
             --content-type "text/html" \
             --region ${{ env.AWS_REGION }}
 
+          aws s3 cp dashboard/portal.html \
+            s3://lexflow-dashboard-097659826330/portal.html \
+            --content-type "text/html" \
+            --region ${{ env.AWS_REGION }}
+
           aws s3 cp intake-form/index.html \
             s3://lexflow-intake-form-097659826330/index.html \
             --content-type "text/html" \

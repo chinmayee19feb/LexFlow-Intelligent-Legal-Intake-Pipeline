@@ -29,23 +29,26 @@ def send_client_ack(
     client_name: str,
     case_type: str,
     acknowledgment_text: str,
+    portal_url: str,
     from_email: str,
     region: str = "us-east-1",
 ) -> None:
     """
-    Send a plain-text acknowledgment email to the client.
-    Plain text feels more personal than HTML.
+    Send a plain-text acknowledgment email to the client with portal link.
     """
     subject = f"We received your inquiry — {case_type}"
-
     body = (
         f"{acknowledgment_text}\n\n"
+        "---\n"
+        "TRACK YOUR CASE STATUS\n"
+        f"You can check the status of your case at any time by visiting:\n"
+        f"{portal_url}\n\n"
+        "This link is unique to your case and valid for 7 days.\n\n"
         "---\n"
         "This message was sent automatically upon receipt of your inquiry.\n"
         "Please do not reply to this email.\n"
         "If you need immediate assistance, please call our office directly."
     )
-
     try:
         _ses_client(region).send_email(
             Source=from_email,
@@ -57,7 +60,6 @@ def send_client_ack(
         )
         logger.info("Client ack email sent | to=%s", to_email)
     except ClientError as e:
-        # Log but never fail the intake request over an email error
         logger.error(
             "Client ack email FAILED | to=%s | error=%s",
             to_email,
