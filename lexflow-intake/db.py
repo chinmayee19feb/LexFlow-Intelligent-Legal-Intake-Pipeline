@@ -52,11 +52,10 @@ def get_by_token(table_name: str, portal_token: str, region: str = "us-east-1") 
     Look up an intake record by portal_token using a DynamoDB scan with filter.
     Returns the record dict or None if not found.
     """
+    from boto3.dynamodb.conditions import Attr
     table = get_table(table_name, region)
     response = table.scan(
-        FilterExpression="portal_token = :token",
-        ExpressionAttributeValues={":token": portal_token},
-        Limit=1,
+        FilterExpression=Attr("portal_token").eq(portal_token)
     )
     items = response.get("Items", [])
     return items[0] if items else None
