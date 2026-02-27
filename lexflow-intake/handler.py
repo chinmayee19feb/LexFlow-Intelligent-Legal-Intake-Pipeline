@@ -133,7 +133,7 @@ def lambda_handler(event, context):
         )
         emailer.send_attorney_alert(
             to_email=ATTORNEY_EMAIL,
-            intake=record,
+            record=record,
             from_email=FROM_EMAIL,
             region=AWS_REGION,
         )
